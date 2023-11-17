@@ -8,7 +8,7 @@ filesApp=$(find src -path "*/app/*.ts" -type f | grep -v "/test/" | grep -v "\.s
 filesInterface=$(find src -path "*/port/*.ts" -type f | grep -v "/test/" | grep -v "\.spec\.ts$")
 filesEntity=$(find src -path "*/infra/datastore/entity/*.ts" -type f | grep -v "/test/" | grep -v "\.spec\.ts$")
 filesDomain=$(find src -path "*/domain/*.ts" -type f | grep -v "/test/" | grep -v "\.spec\.ts$")
-
+filesAppOrDomain=$(find src \( -path "*/domain/*.ts" -o -path "*/app/*.ts" \) -type f -not -path "*/test/*" -not -name "*.spec.ts")
 
 fileCounter=0
 
@@ -44,24 +44,27 @@ for file in $filesDomain; do
 done
 
 # Ajouter des vérifications supplémentaires ici pour les appels de framework dans /domain ou /app
-for file in $filesApp; do
-  echo "check for dependency in:" $file
-  if grep -q "@nestjs" "$file"; then
-    echo "Error: File $file contains a framework call, which is not allowed in /domain or /app."
-    exit 1
-  fi
-   ((fileCounter++))
+for file in $filesAppOrDomain ; do
+ echo "check for framework dependency in:" $file
+ if grep -q "@nestjs/common" "$file"; then
+   echo "Error: File $file contains a framework call, which is not allowed in /domain or /app."
+   exit 1
+ fi
+ echo "check for librairies dependency in:" $file
+  if awk '/^*from / && !/@app/' $file | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep .; then
+     echo "Error: File $file contains an import statement that does not start with '@app', which is not allowed in /app."
+     exit 1
+   fi
+   ((fileCounter+=2))
 done
 
 for file in $filesInterface; do
   echo "check for interface in:" $file
-  if grep -q -E "class|enum" "$file"; then
-    if ! grep -q "interface" "$file"; then
+  if grep -q -E "class|enum" "$file" && ! grep -q "interface" "$file"; then
       echo "Error: File $file contains a class or enum, but it does not contain an interface, which is not allowed in /domain or /app."
       exit 1
-    fi
   fi
    ((fileCounter++))
 done
 
-echo "Clean Architecture validation passed. check $fileCounter files."
+echo "Clean Architecture validation passed. $fileCounter check done."
